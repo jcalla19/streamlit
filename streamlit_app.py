@@ -29,7 +29,60 @@ st.dataframe(sales_by_month)
 # Here the grouped months are the index and automatically used for the x axis
 st.line_chart(sales_by_month, y="Sales")
 
-st.selectbox("Choose Category", "Furniture", "Office Supplies", "Technology", index=0, key=None, help=None, on_change=None, args=None, kwargs=None, placeholder="Choose an option", disabled=False, label_visibility="visible")
+st.write("## Interactive Analysis")
+
+# Add Profit_Margin column (safely avoid divide-by-zero)
+df['Profit_Margin'] = df['Profit'] / df['Sales'].replace(0, pd.NA)
+
+# Global average profit margin (for delta reference)
+overall_avg_margin = df['Profit_Margin'].mean()
+
+# Reset index for filtering by Category/Sub-Category
+df_reset = df.reset_index()
+
+# (1) Dropdown for Category
+category = st.selectbox("Select Category", df_reset['Category'].unique())
+
+# (2) Multi-select for Sub-Category filtered by selected Category
+available_subcats = df_reset[df_reset['Category'] == category]['Sub_Category'].unique()
+selected_subcats = st.multiselect("Select Sub-Category(s)", available_subcats)
+
+# Filter the data
+filtered_df = df_reset[
+    (df_reset['Category'] == category) &
+    (df_reset['Sub_Category'].isin(selected_subcats))
+]
+
+# Only show visuals/metrics if sub-categories are selected
+if not filtered_df.empty:
+
+    # (3) Line chart of sales for selected items (grouped monthly)
+    sales_by_month_filtered = (
+        filtered_df
+        .set_index('Order_Date')
+        .groupby(pd.Grouper(freq='M'))['Sales']
+        .sum()
+        .reset_index()
+    )
+
+    st.subheader("Sales Over Time for Selected Sub-Categories")
+    st.line_chart(sales_by_month_filtered.set_index("Order_Date"))
+
+    # (4) Show metrics
+    total_sales = filtered_df['Sales'].sum()
+    total_profit = filtered_df['Profit'].sum()
+    profit_margin = (total_profit / total_sales) if total_sales != 0 else 0
+    delta_margin = profit_margin - overall_avg_margin
+
+    st.subheader("Key Metrics for Selected Items")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Sales", f"${total_sales:,.2f}")
+    col2.metric("Total Profit", f"${total_profit:,.2f}")
+    col3.metric("Profit Margin", f"{profit_margin * 100:.2f}%", f"{delta_margin * 100:+.2f}%")
+
+else:
+    st.info("Please select at least one sub-category to view results.")
+
 st.write("### (1) add a drop down for Category (https://docs.streamlit.io/library/api-reference/widgets/st.selectbox)")
 st.write("### (2) add a multi-select for Sub_Category *in the selected Category (1)* (https://docs.streamlit.io/library/api-reference/widgets/st.multiselect)")
 st.write("### (3) show a line chart of sales for the selected items in (2)")
